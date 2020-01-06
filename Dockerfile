@@ -26,7 +26,7 @@ COPY ./ ./
 # Build the executable to `/app`. Mark the build as statically linked.
 RUN CGO_ENABLED=0 go build \
     -installsuffix 'static' \
-    -o /edge-test-app .
+    -o /cockroachdb-app .
 
 # RUN go build -o /openstack-quota-collector
 
@@ -39,10 +39,10 @@ COPY --from=build /user/group /user/passwd /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Import the compiled executable from the first stage.
-COPY --from=build /edge-test-app /
+COPY --from=build /cockroachdb-app /
 
 # Perform any further action as an unprivileged user.
 USER nobody:nobody
 
 # CMD /openstack-quota-collector
-ENTRYPOINT ["/edge-test-app"]
+ENTRYPOINT ["/cockroachdb-app"]

@@ -2,18 +2,19 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
+	//"encoding/json"
+	"fmt"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
-	"net"
+	//"net"
 	"net/http"
 )
 
-func main() {
+func getRows(w http.ResponseWriter, r *http.Request) {
 	// Connect to the "bank" database.
 	db, err := sql.Open("postgres",
-		"postgresql://maxroach@localhost:26257/bank?ssl=true&sslmode=require&sslrootcert=certs/ca.crt&sslkey=certs/client.maxroach.key&sslcert=certs/client.maxroach.crt")
+		"postgresql://maxroach@cockroachdb-public.svc.cluster.local:26257/bank?sslmode=disable")
 	if err != nil {
 		log.Fatal("error connecting to the database: ", err)
 	}
@@ -45,4 +46,11 @@ func main() {
 		}
 		fmt.Printf("%d %d\n", id, balance)
 	}
+}
+
+func main() {
+	router := mux.NewRouter().StrictSlash(true)
+	router.HandleFunc("/bank", getRows)
+	log.Fatal(http.ListenAndServe(":8080", router))
+
 }
