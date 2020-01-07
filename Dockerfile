@@ -42,7 +42,7 @@ COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /cockroachdb-app /
 
 # Perform any further action as an unprivileged user.
-USER nobody:nobody
+#USER nobody:nobody
 
 # CMD /openstack-quota-collector
 ENTRYPOINT ["/cockroachdb-app"]
