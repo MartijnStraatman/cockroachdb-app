@@ -43,19 +43,8 @@ func addDeposit(w http.ResponseWriter, r *http.Request) {
 
 	json.Unmarshal(reqBody, &newDeposit)
 
-	// Create the "accounts" table.
-	if _, err := db.Exec(
-		"CREATE TABLE IF NOT EXISTS deposit (id SERIAL PRIMARY KEY, amount INT, savedbycluster CHARACTER(10), created_at TIMESTAMP DEFAULT NOW())"); err != nil {
-		log.Fatal(err)
-	}
+	save(newDeposit)
 
-	sql := fmt.Sprintf("INSERT INTO deposit (savedbycluster, amount) VALUES ('%s', '%d')", os.Getenv("CLUSTER_NAME"), newDeposit.Amount)
-
-	log.Info(sql)
-
-	if _, err := db.Exec(sql); err != nil {
-		log.Fatal(err)
-	}
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(newDeposit)
 
@@ -95,6 +84,21 @@ func getLatestDeposit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 
+}
+
+func save(d deposit) {
+	if _, err := db.Exec(
+		"CREATE TABLE IF NOT EXISTS deposit (id SERIAL PRIMARY KEY, amount INT, savedbycluster CHARACTER(10), created_at TIMESTAMP DEFAULT NOW())"); err != nil {
+		log.Fatal(err)
+	}
+
+	sql := fmt.Sprintf("INSERT INTO deposit (savedbycluster, amount) VALUES ('%s', '%d')", os.Getenv("CLUSTER_NAME"), d.Amount)
+
+	log.Info(sql)
+
+	if _, err := db.Exec(sql); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func main() {
