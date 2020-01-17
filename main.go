@@ -7,6 +7,7 @@ import (
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
+	"io/ioutil"
 	"net/http"
 	"os"
 )
@@ -14,33 +15,59 @@ import (
 var db *sql.DB
 
 type response struct {
-	AccountID   int    `json:"accountId"`
-	Balance     int    `json:"balance"`
-	CreatedAt   string `json:"created_at"`
-	ClusterName string `json:"clusterName"`
+	TransactionID     int    `json:"transactionId"`
+	Amount            int    `json:"amount"`
+	CreatedAtTime     string `json:"created_at"`
+	SavedByCluster    string `json:"savedByCluster"`
+	ResponseByCluster string `json:"responseByCluster"`
+}
+
+type deposit struct {
+	Amount         int    `json:"amount"`
+	SavedByCluster string `json:"savedByCluster"`
 }
 
 func addDeposit(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	log.Infof("received request")
+
+	reqBody, err := ioutil.ReadAll(r.Body)
+	var newDeposit deposit
+	newDeposit.SavedByCluster = os.Getenv("CLUSTER_NAME")
+
+	log.Info(reqBody)
+
+	if err != nil {
+		log.Error("no request data")
+	}
+
+	json.Unmarshal(reqBody, &newDeposit)
 
 	// Create the "accounts" table.
 	if _, err := db.Exec(
-		"CREATE TABLE IF NOT EXISTS accounts (id SERIAL PRIMARY KEY, balance INT, cluster_name CHARACTER(10), created_at TIMESTAMP DEFAULT NOW())"); err != nil {
+		"CREATE TABLE IF NOT EXISTS deposit (id SERIAL PRIMARY KEY, amount INT, savedbycluster CHARACTER(10), created_at TIMESTAMP DEFAULT NOW())"); err != nil {
 		log.Fatal(err)
 	}
 
-	sql := fmt.Sprintf("INSERT INTO accounts (cluster_name, balance) VALUES ('%s', 250)", os.Getenv("CLUSTER_NAME"))
+	sql := fmt.Sprintf("INSERT INTO deposit (savedbycluster, amount) VALUES ('%s', '%d')", os.Getenv("CLUSTER_NAME"), newDeposit.Amount)
 
 	log.Info(sql)
 
 	if _, err := db.Exec(sql); err != nil {
 		log.Fatal(err)
 	}
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(newDeposit)
 
+	log.Infof("saved %d ", newDeposit.Amount)
 }
 
 func getLatestDeposit(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query("SELECT id, balance, created_at, cluster_name FROM accounts WHERE id = (SELECT MAX(id) FROM accounts)")
+	log.Infof("received request")
+
+	rows, err := db.Query("SELECT id, amount, created_at, savedbycluster FROM deposit WHERE id = (SELECT MAX(id) FROM deposit)")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,21 +75,22 @@ func getLatestDeposit(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("Initial balances:")
 
-	var id, balance int
-	var createdat, clustername string
+	var id, amount int
+	var createdat, savedbycluster string
 	for rows.Next() {
 
-		if err := rows.Scan(&id, &balance, &createdat, &clustername); err != nil {
+		if err := rows.Scan(&id, &amount, &createdat, &savedbycluster); err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("%d %d %s %s\n", id, balance, createdat, clustername)
+		fmt.Printf("%d %d %s %s\n", id, amount, createdat, savedbycluster)
 	}
 
 	response := new(response)
-	response.AccountID = id
-	response.Balance = balance
-	response.CreatedAt = createdat
-	response.ClusterName = clustername
+	response.TransactionID = id
+	response.Amount = amount
+	response.CreatedAtTime = createdat
+	response.SavedByCluster = savedbycluster
+	response.ResponseByCluster = os.Getenv("CLUSTER_NAME")
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
@@ -82,9 +110,14 @@ func main() {
 	}
 	defer db.Close()
 
+	log.Info("connected to database")
+
 	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/bank/deposit", addDeposit)
-	router.HandleFunc("/bank/deposit/show", getLatestDeposit)
+
+	api := router.PathPrefix("/api/v1").Subrouter()
+
+	api.HandleFunc("/deposit", addDeposit).Methods(http.MethodPost)
+	api.HandleFunc("/deposit", getLatestDeposit).Methods(http.MethodGet)
 	log.Fatal(http.ListenAndServe(":8080", router))
 
 }
